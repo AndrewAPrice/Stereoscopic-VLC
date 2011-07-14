@@ -1,0 +1,7 @@
+'nvapiwrapper' is a wrapper around NvAPI, the proprietary-licensed nVidia
+wrapper. nvapiwrapper wraps the nvapi.lib static library (which is a MSVC
+binary) into a dynamically loadable library (nvapiwrapper.dll) that can
+be used via MinGW. Compile nvapiwrapper.c with the MSVC++ compiler to
+output the .dll.
+
+This is only a temporary solution and will not remain here permanently.

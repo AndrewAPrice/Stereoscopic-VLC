@@ -1,0 +1,151 @@
+================================================================================
+Before doing anything, be warned that there is a mixture of GPL and non-GPL
+software in this release, so under no circumstance should you publically
+release a binary version of this software yet. The non-GPL files are:
+vlc/include/nvapi.h
+nvapiwrapper/nvapi.lib
+nvapiwrapper/nvapiwrapper.dll
+nvapiwrapper/nvapiwrapper.c
+================================================================================
+To build follow the standard Win32Compile instructions with a few differences.
+I use 32-bit MSYS/MinGW on x64 Windows 7 Ultimate.
+
+================================================================================
+1. To bootstrap I use the following:
+
+cd vlc
+cp -v /usr/win32/share/aclocal/* m4/
+cp -v /usr/share/aclocal/* m4/
+PATH=/usr/win32/bin:$PATH ./bootstrap
+
+================================================================================
+2. Then to configure:
+
+sh extras/package/win32/configure-msys.sh
+
+================================================================================
+3. To build:
+
+PATH=/usr/win32/bin:$PATH make -j6
+PATH=/usr/win32/bin:$PATH make package-win32 -j6
+
+(The -j6 switch is optional and tells makefile to use 6 threads, it speeds up
+the build time on my 6-core machine.)
+
+'make package-win32' will exit with the following error but that's normal and
+VLC has still been built:
+
+cp: cannot stat `./npapi-vlc/installed/lib/npvlc.dll': No such file or directory
+
+
+================================================================================
+4. Temporarily rename vlc.exe to wow.exe:
+
+cd vlc-1.2.0-git
+mv vlc.exe wow.exe
+
+'wow.exe' can be replaced by a number of windowed-mode 3D Vision executable
+names ('googleearth.exe', etc). This step is required because VLC does not yet
+have a nVidia 3D Vision driver profile, and 'windowed mode' 3D Vision only
+activates for programs with a driver profile. Thankfully, it's just a simple
+file name check.
+
+================================================================================
+5. Copy nvapiwrapper.dll from 'nvapiwrapper' to 'vlc-1.2.0-git':
+
+cp ../nvapiwrapper/nvapiwrapper.dll ./
+
+This is a temporary solution. See nvapiwrapper/README for more details.
+
+================================================================================
+6. To view 3D video you manually enable stereoscopy by running VLC with:
+
+wow --video-filter="stereoscopy" --stereoscopy-left=<left mode>            \
+    --stereoscopy-right=<right mode>
+
+<left mode> and <right mode> represent the method that particular eye is encoded
+with. For example, to watch a Red/Cyan anaglyph video you would use:
+
+wow --video-filter="stereoscopy" --stereoscopy-left=1004                   \
+    --stereoscopy-right=1001
+
+To watch a left/right side-by-side video you would use:
+wow --video-filter="stereoscopy" --stereoscopy-left=2000                   \
+    --stereoscopy-right=2001
+
+The possible values are: (found in modules/video_filter/stereoscopy.h)
+--------------------------------------------------------------------------------
+ 0     STEREOSCOPY_2D
+        If either eye is this value then stereoscopy is disabled and the image
+        is treated as 2D.
+ 1000  STEREOSCOPY_ANAGLYPH_BLUE
+        The eye is encoded into the blue channel of the image and returned as
+        a blue image.
+ 1001  STEREOSCOPY_ANAGLYPH_CYAN
+        The eye is encoded into the blue and green channels of the image and
+        returned as a cyan image.
+ 1002  STEREOSCOPY_ANAGLYPH_GREEN
+        The eye is encoded into the green channel of the image and returned
+        as a green image.
+ 1003  STEREOSCOPY_ANAGLYPH_MAGENTA
+        The eye is encoded into the red and blue channels of the image and
+        returned as a magenta image.
+ 1004  STEREOSCOPY_ANAGLYPH_RED
+        The eye is encoded into the red channel of the image and returned as
+        a red image.
+ 1005  STEREOSCOPY_ANAGLYPH_YELLOW
+        The eye is encoded into the red and green channels of the image and
+        returned as a yellow image.
+
+ 1010  STEREOSCOPY_ANAGLYPH_BLUE_GRAY
+        The eye is encoded into the blue channel and returned as a grayscale
+        image.
+ 1011  STEREOSCOPY_ANAGLYPH_CYAN_GRAY
+        The eye is encoded into the blue and green channels of the image and
+        returned as a grayscale image.
+ 1012  STEREOSCOPY_ANAGLYPH_GREEN_GRAY
+        The eye is encoded into the green channel of the image and returned
+        as a grayscale image.
+ 1013  STEREOSCOPY_ANAGLYPH_MAGENTA_GRAY
+        The eye is encoded into the red and blue channels of the image and
+        returned as a grayscale image.
+ 1014  STEREOSCOPY_ANAGLYPH_RED_GRAY
+        The eye is encoded into the red channel of the image and returned
+        as a grayscale image.
+ 1015  STEREOSCOPY_ANAGLYPH_YELLOW_GRAY
+        The eye is encoded into the red and green channels of the image and
+        returned as a grayscale image.
+
+ 1021  STEREOSCOPY_ANAGLYPH_CYAN_FILL
+        The eye is encoded into the blue and green channels of the image and
+        returned as a full colour image. The missing red channel is filled in
+        with the average of the blue and green channels.
+ 1023  STEREOSCOPY_ANAGLYPH_MAGENTA_FILL
+        The eye is encoded into the red and blue channels of the image and
+        returned as a full colour image. The missing green channel is filled in
+        with the average of the red and blue channels.
+ 1025  STEREOSCOPY_ANAGLYPH_YELLOW_FILL
+        The eye is encoded into the red and green channels of the image and
+        returned as a full colour image. The missing blue channel is filled in
+        with the average of the red and green channels.
+
+ 2000  STEREOSCOPY_SIDEBYSIDE_LEFT
+        The eye is encoded into the left half of the image. Assumes the source
+        is half-SBS but the aspect ratio will need to be halved for full-SBS.
+ 2001  STEREOSCOPY_SIDEBYSIDE_RIGHT
+        The eye is encoded into the right half of the image. Assumes the source
+        is half-SBS but the aspect ratio will need to be halved for full-SBS.
+ 2002  STEREOSCOPY_SIDEBYSIDE_BOTTOM
+        Not yet implemented. Reserved for top/bottom side-by-side.
+ 2003  STEREOSCOPY_SIDEBYSIDE_TOP
+        Not yet implemented. Reserved for top/bottom side-by-side.
+--------------------------------------------------------------------------------
+Please only use the Direct3D vout because the other vout's are not stereoscopic
+aware and will just sequentually show each eye. Also be sure to use the latest
+nVidia drivers. (I have been developing with 275.22.)
+
+The Direct3D vout does not require any configuring. If 3D Vision is detected
+then it will be used. It can be enabled/disabled using the button on the
+3D Vision IR dongle or by using the driver hotkey (CTRL+T by default). If 3D
+Vision is turned off then it does not turn the stereoscopy filter off, so you'll
+just see the left eye.
