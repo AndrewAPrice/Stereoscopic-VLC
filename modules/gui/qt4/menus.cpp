@@ -239,7 +239,7 @@ static int VideoAutoMenuBuilder( vout_thread_t *p_object,
     PUSH_VAR( "deinterlace" );
     PUSH_VAR( "deinterlace-mode" );
     PUSH_VAR( "postprocess" );
-
+    
     return VLC_SUCCESS;
 }
 

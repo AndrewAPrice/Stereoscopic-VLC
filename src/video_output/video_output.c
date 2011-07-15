@@ -746,7 +746,8 @@ static void ThreadChangeFilters(vout_thread_t *vout,
             e->name = name;
             e->cfg  = cfg;
             if (!strcmp(e->name, "deinterlace") ||
-                !strcmp(e->name, "postproc")) {
+                !strcmp(e->name, "postproc") ||
+                !strcmp(e->name, "stereoscopy")) {
                 vlc_array_append(&array_static, e);
             } else {
                 vlc_array_append(&array_interactive, e);

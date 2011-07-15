@@ -28,6 +28,11 @@
 #include <vlc_picture_pool.h>
 #include "events.h"
 
+#ifdef MODULE_NAME_IS_direct3d
+/* assume d3d9.h has alreayd been included */
+#include "nvapi.h"
+#endif
+
 #ifdef MODULE_NAME_IS_wingapi
     typedef struct GXDisplayProperties {
         DWORD cxWidth;
@@ -60,6 +65,23 @@
 #       define kfDirectInverted 0x400
 #   endif
 
+#endif
+
+
+#ifdef MODULE_NAME_IS_direct3d
+    /* The off-screen header that defines a stereo texture. */
+#   define NVSTEREO_IMAGE_SIGNATURE 0x4433564e /* "NV3D" */
+    typedef struct DXNvStereoImageHeader
+    {
+        DWORD dwSignature;
+        DWORD dwWidth;
+        DWORD dwHeight;
+        DWORD dwBPP;
+        DWORD dwFlags;
+    } NVSTEREOIMAGEHEADER, *LPNVSTEREOIMAGEHEADER;
+/* ORed flags in the dwFlags fiels of the NVSTEREO_IMAGE_SIGNATURE structure above */
+#   define DXNV_SWAP_EYES    0x01
+#   define DXNV_SCALE_TO_FIT 0x02
 #endif
 
 /*****************************************************************************
@@ -179,11 +201,31 @@ struct vout_display_sys_t
     D3DCAPS9                d3dcaps;
     LPDIRECT3DDEVICE9       d3ddev;
     D3DPRESENT_PARAMETERS   d3dpp;
+    
+    /* nvapi objects */
+    HINSTANCE               hNvAPIWrapper_dll;
+    bool                    use_nvidia_3d; /* use nVidia 3D Vision - is it
+                                              loaded? if false then can
+                                              assume dll is not loaded */
+    void                    *nvStereoHandle; /* 3d vision stereo handle */
+
+    RECT                    nvRectLeft;
+    RECT                    nvRectRight;
+    RECT                    nvRectHeader;
+
     // scene objects
     LPDIRECT3DTEXTURE9      d3dtex;
     LPDIRECT3DVERTEXBUFFER9 d3dvtc;
     int                     d3dregion_count;
     struct d3d_region_t     *d3dregion;
+    /* Stereoscopic scene objects */
+    LPDIRECT3DTEXTURE9      d3dtex_right; /* store right eye, d3dtex for left */
+    LPDIRECT3DSURFACE9      d3dnv_surface;
+    LPDIRECT3DSURFACE9      d3dback_buffer;
+    LPDIRECT3DSURFACE9      d3dleft_surface;
+    LPDIRECT3DSURFACE9      d3dright_surface;
+    bool                    left_tex_filled;
+    bool                    right_tex_filled;
 
     picture_resource_t      resource;
 

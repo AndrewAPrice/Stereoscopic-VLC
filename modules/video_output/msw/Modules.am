@@ -20,6 +20,8 @@ SOURCES_direct3d = \
 	events.h \
 	events.c \
 	common.c \
+        nvapi.c \
+        nvapi.h \
 	$(NULL)
 
 SOURCES_glwin32 = \

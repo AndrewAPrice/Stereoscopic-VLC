@@ -73,6 +73,7 @@ vlc_module_begin ()
 
     add_bool("direct3d-desktop", false, DESKTOP_TEXT, DESKTOP_LONGTEXT, true)
     add_bool("direct3d-hw-blending", true, HW_BLENDING_TEXT, HW_BLENDING_LONGTEXT, true)
+    
 
     set_capability("vout display", 240)
     add_shortcut("direct3d")
@@ -115,6 +116,9 @@ static void Direct3DDestroy(vout_display_t *);
 static int  Direct3DOpen (vout_display_t *, video_format_t *);
 static void Direct3DClose(vout_display_t *);
 
+static int NvCreate  (vout_display_t *);
+static void NvDestroy (vout_display_t *);
+
 /* */
 typedef struct
 {
@@ -135,7 +139,7 @@ typedef struct d3d_region_t {
 
 static void Direct3DDeleteRegions(int, d3d_region_t *);
 
-static int  Direct3DImportPicture(vout_display_t *vd, d3d_region_t *, LPDIRECT3DSURFACE9 surface);
+static int  Direct3DImportPicture(vout_display_t *vd, d3d_region_t *, LPDIRECT3DSURFACE9 surface, int i_eye);
 static void Direct3DImportSubpicture(vout_display_t *vd, int *, d3d_region_t **, subpicture_t *);
 
 static void Direct3DRenderScene(vout_display_t *vd, d3d_region_t *, int, d3d_region_t *);
@@ -156,9 +160,12 @@ static int Open(vlc_object_t *object)
     if (!sys)
         return VLC_ENOMEM;
 
+    NvCreate(vd);
+
     if (Direct3DCreate(vd)) {
         msg_Err(vd, "Direct3D could not be initialized");
         Direct3DDestroy(vd);
+        NvDestroy(vd);
         free(sys);
         return VLC_EGENERIC;
     }
@@ -230,6 +237,7 @@ error:
     Direct3DClose(vd);
     CommonClean(vd);
     Direct3DDestroy(vd);
+    NvDestroy(vd);
     free(vd->sys);
     return VLC_EGENERIC;
 }
@@ -268,6 +276,7 @@ static void Close(vlc_object_t *object)
     CommonClean(vd);
 
     Direct3DDestroy(vd);
+    NvDestroy(vd);
 
     free(vd->sys);
 }
@@ -286,6 +295,7 @@ static void Prepare(vout_display_t *vd, picture_t *picture, subpicture_t *subpic
 {
     vout_display_sys_t *sys = vd->sys;
     LPDIRECT3DSURFACE9 surface = picture->p_sys->surface;
+    int i_eye = picture->i_eye; /* which eye is this picture from */
 #if 0
     picture_Release(picture);
     VLC_UNUSED(subpicture);
@@ -311,7 +321,10 @@ static void Prepare(vout_display_t *vd, picture_t *picture, subpicture_t *subpic
     }
 
     d3d_region_t picture_region;
-    if (!Direct3DImportPicture(vd, &picture_region, surface)) {
+    if (!Direct3DImportPicture(vd, &picture_region, surface, i_eye)
+       /*!(i_eye & STEREO_WAIT_FOR_NEXT_FRAME_BIT)*/ /* causes it to flicker,
+                                                         perhapes stopping Display
+                                                         will fix it */) {
         int subpicture_region_count     = 0;
         d3d_region_t *subpicture_region = NULL;
         if (subpicture)
@@ -497,6 +510,50 @@ static void Manage (vout_display_t *vd)
 }
 
 /**
+ * Initialises an instance of 3D vision
+ */
+static int NvCreate(vout_display_t *vd)
+{
+    vout_display_sys_t *sys = vd->sys;
+    
+    /* try initialising nvapi */
+    if(NvAPI_Initialize() == NVAPI_OK)
+    {
+        /* not returning NVAPI_OK for Initialise() could mean bad drivers or
+           not using an nVidia card */
+        unsigned char stereoEnabled;
+        if(NvAPI_Stereo_IsEnabled(&stereoEnabled) != NVAPI_OK)
+        {
+            /* not returning NVAPI_OK for Stereo_IsEnabled could possibly mean
+               an unsupported video card or not running Windows Vista/7 */
+            msg_Warn(vd, "Cannot check if NVAPI 3d Vision is enabled. Bad drive or not using compatible card.");
+            NvAPI_Unload();
+            sys->use_nvidia_3d = false;
+            return VLC_EGENERIC;
+        }
+        else
+        {
+			if(!stereoEnabled)
+			{
+			    msg_Warn(vd, "NVAPI 3d Vision is disabled. Enable in nVidia Control Panel or not using compatible card.");
+			    NvAPI_Unload();
+			    sys->use_nvidia_3d = false;
+			    return VLC_EGENERIC;
+			}
+        }
+    }
+    else
+    {
+        msg_Warn(vd, "NvAPI did not want to initialize. Bad driver or not using nVidia card.");
+        sys->use_nvidia_3d = false;
+        return VLC_EGENERIC;
+    }
+
+    sys->use_nvidia_3d = true;
+    return VLC_SUCCESS;
+}
+
+/**
  * It initializes an instance of Direct3D9
  */
 static int Direct3DCreate(vout_display_t *vd)
@@ -538,6 +595,21 @@ static int Direct3DCreate(vout_display_t *vd)
     /* TODO: need to test device capabilities and select the right render function */
 
     return VLC_SUCCESS;
+}
+
+/**
+ * It releases an instance of nVidia 3D Vision
+ */
+static void NvDestroy(vout_display_t *vd)
+{
+    vout_display_sys_t *sys = vd->sys;
+
+    if(!sys->use_nvidia_3d)
+        return;
+
+    sys->use_nvidia_3d = false;
+
+    NvAPI_Unload();
 }
 
 /**
@@ -653,15 +725,27 @@ static int Direct3DOpen(vout_display_t *vd, video_format_t *fmt)
 
     UpdateRects(vd, NULL, NULL, true);
 
+    /* attempt to create a d3d device */
+    if(sys->use_nvidia_3d)
+    {
+        if(NvAPI_Stereo_CreateHandleFromIUnknown(sys->d3ddev,
+            &sys->nvStereoHandle) != NVAPI_OK)
+        {
+        msg_Err(vd, "Could not create a stereo handle.");
+            NvDestroy(vd);
+        }
+    }
+
     if (Direct3DCreateResources(vd, fmt)) {
         msg_Err(vd, "Failed to allocate resources");
         return VLC_EGENERIC;
     }
-
+    
     /* Change the window title bar text */
     EventThreadUpdateTitle(sys->event, VOUT_TITLE " (Direct3D output)");
 
     msg_Dbg(vd, "Direct3D device adapter successfully initialized");
+    
     return VLC_SUCCESS;
 }
 
@@ -673,6 +757,12 @@ static void Direct3DClose(vout_display_t *vd)
     vout_display_sys_t *sys = vd->sys;
 
     Direct3DDestroyResources(vd);
+
+    if(sys->use_nvidia_3d)
+    {
+        /* destroy stereo handle */
+        NvAPI_Stereo_DestroyHandle(sys->nvStereoHandle);
+    }
 
     if (sys->d3ddev)
        IDirect3DDevice9_Release(sys->d3ddev);
@@ -694,11 +784,28 @@ static int Direct3DReset(vout_display_t *vd)
     /* release all D3D objects */
     Direct3DDestroyResources(vd);
 
+    if(sys->use_nvidia_3d)
+    {
+        /* destroy stereo handle */
+        NvAPI_Stereo_DestroyHandle(sys->nvStereoHandle);
+    }
+
     /* */
     HRESULT hr = IDirect3DDevice9_Reset(d3ddev, &sys->d3dpp);
     if (FAILED(hr)) {
         msg_Err(vd, "%s failed ! (hr=%08lX)", __FUNCTION__, hr);
         return VLC_EGENERIC;
+    }
+
+    /* attempt to create a d3d device */
+    if(sys->use_nvidia_3d)
+    {
+        if(NvAPI_Stereo_CreateHandleFromIUnknown(sys->d3ddev,
+            &sys->nvStereoHandle) != NVAPI_OK)
+        {
+        msg_Err(vd, "Could not create a stereo handle.");
+            NvDestroy(vd);
+        }
     }
 
     UpdateRects(vd, NULL, NULL, true);
@@ -1013,12 +1120,116 @@ static int Direct3DCreateScene(vout_display_t *vd, const video_format_t *fmt)
         return VLC_EGENERIC;
     }
 
+    LPDIRECT3DSURFACE9 d3dleft_surface;
+    hr = IDirect3DTexture9_GetSurfaceLevel(d3dtex, 0, &d3dleft_surface);
+    if (FAILED(hr)) {
+        msg_Err(vd, "Failed to get surface of left texture. (hr=0x%lx)", hr);
+        IDirect3DTexture9_Release(d3dtex);
+        IDirect3DVertexBuffer9_Release(d3dvtc);
+        return VLC_EGENERIC;
+    }
+
+    if (sys->use_nvidia_3d)
+    {
+        /* secondary texture for right eye */
+        LPDIRECT3DTEXTURE9 d3dtex_right;
+        hr = IDirect3DDevice9_CreateTexture(d3ddev,
+                                            fmt->i_width,
+                                            fmt->i_height,
+                                            1,
+                                            D3DUSAGE_RENDERTARGET,
+                                            sys->d3dpp.BackBufferFormat,
+                                            D3DPOOL_DEFAULT,
+                                            &d3dtex_right,
+                                            NULL);
+        if (FAILED(hr)) {
+            msg_Err(vd, "Failed to create secondary texture. (hr=0x%lx)", hr);
+            IDirect3DSurface9_Release(d3dleft_surface);
+            IDirect3DTexture9_Release(d3dtex);
+            IDirect3DVertexBuffer9_Release(d3dvtc);
+            return VLC_EGENERIC;
+        }
+
+        /* nvidia stereo surface */
+        LPDIRECT3DSURFACE9 d3dnv_surface;
+        hr = IDirect3DDevice9_CreateRenderTarget(d3ddev,
+                                                 sys->rect_display.right * 2,
+                                                 sys->rect_display.bottom + 1,
+                                                 D3DFMT_A8R8G8B8,
+                                                 D3DMULTISAMPLE_NONE,
+                                                 0,
+                                                 TRUE,
+                                                 &d3dnv_surface,
+                                                 NULL);
+        if (FAILED(hr)) {
+            msg_Err(vd, "Failed to create stereo surface. (hr=0x%lx)", hr);
+            IDirect3DTexture9_Release(d3dtex_right);
+            IDirect3DSurface9_Release(d3dleft_surface);
+            IDirect3DTexture9_Release(d3dtex);
+            IDirect3DVertexBuffer9_Release(d3dvtc);
+            return VLC_EGENERIC;
+        }                                       
+
+        LPDIRECT3DSURFACE9 d3dright_surface;
+        hr = IDirect3DTexture9_GetSurfaceLevel(d3dtex_right, 0, &d3dright_surface);
+        if (FAILED(hr)) {
+            msg_Err(vd, "Failed to get surface of right texture. (hr=0x%lx)", hr);
+            IDirect3DSurface9_Release(d3dnv_surface);
+            IDirect3DTexture9_Release(d3dtex_right);
+            IDirect3DSurface9_Release(d3dleft_surface);
+            IDirect3DTexture9_Release(d3dtex);
+            IDirect3DVertexBuffer9_Release(d3dvtc);
+            return VLC_EGENERIC;
+        }                                             
+       
+
+        LPDIRECT3DSURFACE9 d3dback_buffer;
+        hr = IDirect3DDevice9_GetBackBuffer(d3ddev,
+                                            0,
+                                            0,
+                                            D3DBACKBUFFER_TYPE_MONO,
+                                            &d3dback_buffer);
+        if (FAILED(hr)) {
+            msg_Err(vd, "Failed to get device back buffer. (hr=0x%lx)", hr);
+            IDirect3DSurface9_Release(d3dright_surface);
+            IDirect3DSurface9_Release(d3dleft_surface);
+            IDirect3DSurface9_Release(d3dnv_surface);
+            IDirect3DTexture9_Release(d3dtex_right);
+            IDirect3DTexture9_Release(d3dtex);
+            IDirect3DVertexBuffer9_Release(d3dvtc);
+            return VLC_EGENERIC;
+        }                        
+
+        sys->d3dtex_right = d3dtex_right;
+        sys->d3dnv_surface = d3dnv_surface;
+        sys->d3dback_buffer = d3dback_buffer;
+        sys->d3dright_surface = d3dright_surface;
+
+        sys->nvRectLeft.left = 0;
+        sys->nvRectLeft.top = 0;
+        sys->nvRectLeft.right = fmt->i_width;
+        sys->nvRectLeft.bottom = fmt->i_height;
+
+        sys->nvRectRight.left = fmt->i_width;
+        sys->nvRectRight.top = 0;
+        sys->nvRectRight.right = fmt->i_width * 2;
+        sys->nvRectRight.bottom = fmt->i_height;
+
+        sys->nvRectHeader.left = 0;
+        sys->nvRectHeader.top = 0;
+        sys->nvRectHeader.right = fmt->i_width * 2;
+        sys->nvRectHeader.bottom = fmt->i_height + 1;
+    }
+
+
     /* */
     sys->d3dtex = d3dtex;
     sys->d3dvtc = d3dvtc;
-
     sys->d3dregion_count = 0;
     sys->d3dregion       = NULL;
+    sys->d3dleft_surface = d3dleft_surface;
+    sys->left_tex_filled = false;
+    sys->right_tex_filled = false;
 
     sys->clear_scene = true;
 
@@ -1094,6 +1305,37 @@ static void Direct3DDestroyScene(vout_display_t *vd)
 
     Direct3DDeleteRegions(sys->d3dregion_count, sys->d3dregion);
 
+
+    if (sys->use_nvidia_3d)
+    {
+        LPDIRECT3DSURFACE9 d3dright_surface = sys->d3dright_surface;
+        if(d3dright_surface)
+            IDirect3DSurface9_Release(d3dright_surface);
+        sys->d3dright_surface = NULL;
+
+        LPDIRECT3DTEXTURE9 d3dtex_right = sys->d3dtex_right;
+        if(d3dtex_right)
+            IDirect3DTexture9_Release(d3dtex_right);
+        sys->d3dtex_right = NULL;
+
+        LPDIRECT3DSURFACE9 d3dnv_surface = sys->d3dnv_surface;
+        if(d3dnv_surface)
+            IDirect3DSurface9_Release(d3dnv_surface);
+        sys->d3dnv_surface = NULL;
+
+        LPDIRECT3DSURFACE9 d3dback_buffer = sys->d3dback_buffer;
+        if(d3dback_buffer)
+            IDirect3DSurface9_Release(d3dback_buffer);
+        sys->d3dback_buffer = NULL;
+    }
+
+
+    LPDIRECT3DSURFACE9 d3dleft_surface = sys->d3dleft_surface;
+    if(d3dleft_surface)
+        IDirect3DSurface9_Release(d3dleft_surface);
+    sys->d3dleft_surface = NULL;
+
+
     LPDIRECT3DVERTEXBUFFER9 d3dvtc = sys->d3dvtc;
     if (d3dvtc)
         IDirect3DVertexBuffer9_Release(d3dvtc);
@@ -1156,7 +1398,8 @@ static void Direct3DSetupVertices(CUSTOMVERTEX *vertices,
  */
 static int Direct3DImportPicture(vout_display_t *vd,
                                  d3d_region_t *region,
-                                 LPDIRECT3DSURFACE9 source)
+                                 LPDIRECT3DSURFACE9 source,
+                                 int i_eye)
 {
     vout_display_sys_t *sys = vd->sys;
     HRESULT hr;
@@ -1166,24 +1409,48 @@ static int Direct3DImportPicture(vout_display_t *vd,
         return VLC_EGENERIC;
     }
 
+	/* mask out all flags so i_eye only stores the eye number */
+	i_eye &= STEREO_EYE_MASK;
+
+    /* msg_Dbg(vd, "Receiving eye (i_eye=%i)", i_eye); */
+
     /* retrieve texture top-level surface */
     LPDIRECT3DSURFACE9 destination;
-    hr = IDirect3DTexture9_GetSurfaceLevel(sys->d3dtex, 0, &destination);
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return VLC_EGENERIC;
+    /* either 2d, left, or no 3d */
+    if(!sys->use_nvidia_3d || i_eye < 2 )
+    {
+        destination = sys->d3dleft_surface;
+        if(i_eye == 0)
+        {
+            /* clear both eyes if we just received a 2d image
+               so we go back to drawing in 2d */
+            sys->right_tex_filled = false;
+            sys->left_tex_filled = false;
+        }
+        else
+            sys->left_tex_filled = true;
+    }
+    else
+    {
+        destination = sys->d3dright_surface;
+        sys->right_tex_filled = true;
     }
 
     /* Copy picture surface into texture surface
      * color space conversion happen here */
     hr = IDirect3DDevice9_StretchRect(sys->d3ddev, source, NULL, destination, NULL, D3DTEXF_NONE);
-    IDirect3DSurface9_Release(destination);
+
     if (FAILED(hr)) {
         msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
         return VLC_EGENERIC;
     }
 
     /* */
+/*    if(sys->left_tex_filled && sys->right_tex_filled &&
+        sys->use_nvidia_3d)
+        return VLC_SUCCESS;*/
+
+    /* only needed for 3d, but if we rapidly turn off 2d we require this to exist */
     region->texture = sys->d3dtex;
     Direct3DSetupVertices(region->vertex,
                           vd->sys->rect_src,
@@ -1304,55 +1571,156 @@ static int Direct3DRenderRegion(vout_display_t *vd,
     vout_display_sys_t *sys = vd->sys;
 
     LPDIRECT3DDEVICE9 d3ddev = vd->sys->d3ddev;
+    bool drawInStereo;
 
-    LPDIRECT3DVERTEXBUFFER9 d3dvtc = sys->d3dvtc;
-    LPDIRECT3DTEXTURE9      d3dtex = region->texture;
+    /* check if we can draw in stereo */    
+    if(sys->left_tex_filled && sys->right_tex_filled &&
+        sys->use_nvidia_3d)
+    {
+        /* check to see if stereo is turned on */
+        unsigned char stereoOn;
+        if(NvAPI_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
+		{
+			if(!stereoOn)
+			{
+				/* activate 3d vision because it's not yet turned on */
+				NvAPI_Stereo_Activate(sys->nvStereoHandle);
+			}
 
-    HRESULT hr;
-
-    /* Import vertices */
-    void *vertex;
-    hr = IDirect3DVertexBuffer9_Lock(d3dvtc, 0, 0, &vertex, D3DLOCK_DISCARD);
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return -1;
+			/* check again */
+			if(NvAPI_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
+			{
+				drawInStereo = (bool)stereoOn;
+			}
+			else
+				drawInStereo = false;
+		}
+        else
+            drawInStereo = false;
     }
-    memcpy(vertex, region->vertex, sizeof(region->vertex));
-    hr = IDirect3DVertexBuffer9_Unlock(d3dvtc);
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return -1;
-    }
+    else
+	{
+		if(sys->use_nvidia_3d)
+		{
+			/* check if stereo is on */
+            unsigned char stereoOn;
+			if(NvAPI_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
+			{
+				if(stereoOn)
+				{
+					/* deactivate 3d vision because it's turned on (saves wireless glass's power
+					  to disable when not viewing 3d) */
+					NvAPI_Stereo_Deactivate(sys->nvStereoHandle);
+				}
+			}
 
-    // Setup our texture. Using textures introduces the texture stage states,
-    // which govern how textures get blended together (in the case of multiple
-    // textures) and lighting information. In this case, we are modulating
-    // (blending) our texture with the diffuse color of the vertices.
-    hr = IDirect3DDevice9_SetTexture(d3ddev, 0, (LPDIRECT3DBASETEXTURE9)d3dtex);
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return -1;
-    }
+		}
+        drawInStereo = false;
+	}
 
-    // Render the vertex buffer contents
-    hr = IDirect3DDevice9_SetStreamSource(d3ddev, 0, d3dvtc, 0, sizeof(CUSTOMVERTEX));
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return -1;
-    }
+    if(drawInStereo)
+    {
+        /* draw stereoscopic image */
 
-    // we use FVF instead of vertex shader
-    hr = IDirect3DDevice9_SetFVF(d3ddev, D3DFVF_CUSTOMVERTEX);
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return -1;
-    }
+        RECT dest = sys->rect_dest_clipped;
+        /* work around for anyone reading this code:
+            showing right image on left half of stereo surface, then showing
+            left image on right half of stereo surface, and using the
+            DXNV_SWAP_EYES flag
 
-    // draw rectangle
-    hr = IDirect3DDevice9_DrawPrimitive(d3ddev, D3DPT_TRIANGLEFAN, 0, 2);
-    if (FAILED(hr)) {
-        msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
-        return -1;
+            For some reason stereomode wouldn't work correctly without
+            that flag.
+        */
+        /* copy left and right image to stereo surface*/
+        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dright_surface,
+            &sys->nvRectLeft/*&sys->rect_src_clipped*/, sys->d3dnv_surface, &dest,
+            D3DTEXF_NONE);
+
+        dest.left = sys->rect_display.right;
+        dest.right += sys->rect_display.right;
+        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dleft_surface,
+            &sys->nvRectLeft/*&sys->rect_src_clipped*/, sys->d3dnv_surface, &dest,
+            D3DTEXF_NONE);
+
+        /* write in the nvidia header */
+        D3DLOCKED_RECT lr;
+        IDirect3DSurface9_LockRect(sys->d3dnv_surface, &lr, NULL, 0);
+        LPNVSTEREOIMAGEHEADER pSIH =
+            (LPNVSTEREOIMAGEHEADER)(((unsigned char *) lr.pBits) +
+            (lr.Pitch * sys->rect_display.bottom));
+
+        /* write signature into stereo surface */
+        pSIH->dwSignature = NVSTEREO_IMAGE_SIGNATURE;
+        pSIH->dwBPP = 32;
+        pSIH->dwFlags = DXNV_SWAP_EYES;
+        pSIH->dwWidth = sys->rect_display.right * 2; 
+        pSIH->dwHeight = sys->rect_display.bottom;
+
+        IDirect3DSurface9_UnlockRect(sys->d3dnv_surface);
+
+        /* copy stereo surface into back buffer */
+        RECT stereo_source;
+        stereo_source.top = 0;
+        stereo_source.left = 0;
+        stereo_source.right = sys->rect_display.right * 2;
+        stereo_source.bottom = sys->rect_display.bottom + 1;
+        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dnv_surface,
+            &stereo_source, sys->d3dback_buffer,
+            &sys->rect_display, D3DTEXF_NONE);
+    }
+    else
+    {
+        /* draw 2d image */
+
+        LPDIRECT3DVERTEXBUFFER9 d3dvtc = sys->d3dvtc;
+        LPDIRECT3DTEXTURE9      d3dtex = region->texture;
+
+        HRESULT hr;
+
+        /* Import vertices */
+        void *vertex;
+        hr = IDirect3DVertexBuffer9_Lock(d3dvtc, 0, 0, &vertex, D3DLOCK_DISCARD);
+        if (FAILED(hr)) {
+            msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
+            return -1;
+        }
+        memcpy(vertex, region->vertex, sizeof(region->vertex));
+        hr = IDirect3DVertexBuffer9_Unlock(d3dvtc);
+        if (FAILED(hr)) {
+            msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
+            return -1;
+        }
+
+        // Setup our texture. Using textures introduces the texture stage states,
+        // which govern how textures get blended together (in the case of multiple
+        // textures) and lighting information. In this case, we are modulating
+        // (blending) our texture with the diffuse color of the vertices.
+        hr = IDirect3DDevice9_SetTexture(d3ddev, 0, (LPDIRECT3DBASETEXTURE9)d3dtex);
+        if (FAILED(hr)) {
+            msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
+            return -1;
+        }
+
+        // Render the vertex buffer contents
+        hr = IDirect3DDevice9_SetStreamSource(d3ddev, 0, d3dvtc, 0, sizeof(CUSTOMVERTEX));
+        if (FAILED(hr)) {
+            msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
+            return -1;
+        }
+
+        // we use FVF instead of vertex shader
+        hr = IDirect3DDevice9_SetFVF(d3ddev, D3DFVF_CUSTOMVERTEX);
+        if (FAILED(hr)) {
+            msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
+            return -1;
+        }
+
+        // draw rectangle
+        hr = IDirect3DDevice9_DrawPrimitive(d3ddev, D3DPT_TRIANGLEFAN, 0, 2);
+        if (FAILED(hr)) {
+            msg_Dbg(vd, "%s:%d (hr=0x%0lX)", __FUNCTION__, __LINE__, hr);
+            return -1;
+        }
     }
     return 0;
 }

@@ -98,6 +98,7 @@ struct audio_format_t
 /**
  * video format description
  */
+ 
 struct video_format_t
 {
     vlc_fourcc_t i_chroma;                               /**< picture chroma */

@@ -242,6 +242,11 @@ ExtVideo::ExtVideo( intf_thread_t *_p_intf, QTabWidget *_parent ) :
         _parent->removeTab( _parent->indexOf( ui.tab_atmo ) );
     }
 
+	SETUP_VFILTER( stereoscopy )
+    SETUP_VFILTER_OPTION( stereoscopicLeftCombo, currentIndexChanged( QString ) )
+	SETUP_VFILTER_OPTION( stereoscopicRightCombo, currentIndexChanged( QString ) )
+
+
 #undef SETUP_VFILTER
 #undef SETUP_VFILTER_OPTION
 
