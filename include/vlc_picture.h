@@ -75,6 +75,15 @@ struct picture_t
     plane_t         p[PICTURE_PLANE_MAX];     /**< description of the planes */
     int             i_planes;                /**< number of allocated planes */
 
+    /** \name Stereoscopy properties
+     **@{*/
+    int             i_eye;                /**< the stereoscopy eye, may be:
+                                                0 - 2d image,
+                                                1- left eye,
+                                                2 - right eye - could possibly be > 2 for more
+                                                    than 2 eyes */
+    /**@}*/
+
     /** \name Picture management properties
      * These properties can be modified using the video output thread API,
      * but should never be written directly */
@@ -99,6 +108,7 @@ struct picture_t
     /** Private data - the video output plugin might want to put stuff here to
      * keep track of the picture */
     picture_sys_t * p_sys;
+
 
     /** This way the picture_Release can be overloaded */
     void (*pf_release)( picture_t * );
@@ -216,6 +226,7 @@ static inline void picture_CopyProperties( picture_t *p_dst, const picture_t *p_
     p_dst->i_nb_fields = p_src->i_nb_fields;
     p_dst->b_top_field_first = p_src->b_top_field_first;
 
+    p_dst->i_eye = p_src->i_eye; /* for stereoscopy */
     /* FIXME: copy ->p_q and ->p_qstride */
 }
 

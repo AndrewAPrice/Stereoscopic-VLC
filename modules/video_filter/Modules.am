@@ -57,6 +57,7 @@ SOURCES_postproc = postproc.c
 SOURCES_swscale = swscale.c ../codec/avcodec/chroma.c
 SOURCES_scene = scene.c
 SOURCES_sepia = sepia.c
+SOURCES_stereoscopy = stereoscopy.c
 SOURCES_yuvp = yuvp.c
 SOURCES_antiflicker = antiflicker.c
 SOURCES_atmo = atmo/atmo.cpp \
@@ -124,6 +125,7 @@ libvlc_LTLIBRARIES += \
 	libsepia_plugin.la \
 	libsharpen_plugin.la \
 	libsubsdelay_plugin.la \
+	libstereoscopy_plugin.la \
 	libtransform_plugin.la \
 	libwall_plugin.la \
 	libwave_plugin.la \

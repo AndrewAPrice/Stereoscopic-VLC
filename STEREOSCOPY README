@@ -18,6 +18,8 @@ cp -v /usr/win32/share/aclocal/* m4/
 cp -v /usr/share/aclocal/* m4/
 PATH=/usr/win32/bin:$PATH ./bootstrap
 
+if it fails witH
+
 ================================================================================
 2. Then to configure:
 

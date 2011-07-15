@@ -171,6 +171,10 @@ enum {
      * video_format_t::i_visible_width/height */
     VOUT_DISPLAY_CHANGE_SOURCE_CROP,   /* const video_format_t *p_source */
 
+	/* Ask the module to acknowledge/refuse source stereoscopy format change after being
+	 * requested externally */
+    VOUT_DISPLAY_CHANGE_STEREOSCOPY,
+
     /* Ask an opengl interface if available. */
     VOUT_DISPLAY_GET_OPENGL,           /* vlc_gl_t ** */
 };

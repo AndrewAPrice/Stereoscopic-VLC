@@ -499,7 +499,7 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
             return NULL;
         }
 
-        p_rightOut->i_eye = 1;
+        p_rightOut->i_eye = 2;
         picture_Release( p_inpic );
         return p_rightOut;
     }
@@ -518,7 +518,7 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
             return NULL;
         }
 
-        p_leftOut->i_eye = 2;
+        p_leftOut->i_eye = 1;
         picture_Release( p_inpic );
         return p_leftOut;
     }
