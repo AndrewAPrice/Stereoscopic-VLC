@@ -1,12 +1,4 @@
 ================================================================================
-Before doing anything, be warned that there is a mixture of GPL and non-GPL
-software in this release, so under no circumstance should you publically
-release a binary version of this software yet. The non-GPL files are:
-vlc/include/nvapi.h
-nvapiwrapper/nvapi.lib
-nvapiwrapper/nvapiwrapper.dll
-nvapiwrapper/nvapiwrapper.c
-================================================================================
 To build follow the standard Win32Compile instructions with a few differences.
 I use 32-bit MSYS/MinGW on x64 Windows 7 Ultimate.
 
@@ -17,8 +9,6 @@ cd vlc
 cp -v /usr/win32/share/aclocal/* m4/
 cp -v /usr/share/aclocal/* m4/
 PATH=/usr/win32/bin:$PATH ./bootstrap
-
-if it fails witH
 
 ================================================================================
 2. Then to configure:
@@ -53,101 +43,90 @@ activates for programs with a driver profile. Thankfully, it's just a simple
 file name check.
 
 ================================================================================
-5. Copy nvapiwrapper.dll from 'nvapiwrapper' to 'vlc-1.2.0-git':
+5. To view 3D video you manually enable stereoscopy by running VLC with:
 
-cp ../nvapiwrapper/nvapiwrapper.dll ./
+wow --video-filter="stereoscopy"
 
-This is a temporary solution. See nvapiwrapper/README for more details.
+You can pass the parameters --sterescopy-left= and --stereoscopy-right= to
+set the stereoscopy value for each eye.
 
-================================================================================
-6. To view 3D video you manually enable stereoscopy by running VLC with:
+It's also possible to configure this via the QT4 interface by going to
+'Effects and Filters' through the Video menu. Search for the Stereoscopic 3D
+tab under the Video Effects tab.
 
-wow --video-filter="stereoscopy" --stereoscopy-left=<left mode>            \
-    --stereoscopy-right=<right mode>
-
-<left mode> and <right mode> represent the method that particular eye is encoded
-with. For example, to watch a Red/Cyan anaglyph video you would use:
-
-wow --video-filter="stereoscopy" --stereoscopy-left=1004                   \
-    --stereoscopy-right=1001
-
-To watch a left/right side-by-side video you would use:
-wow --video-filter="stereoscopy" --stereoscopy-left=2000                   \
-    --stereoscopy-right=2001
-
-The possible values are: (found in modules/video_filter/stereoscopy.h)
+The possible stereoscopic input values are: (found in modules/video_filter/stereoscopy.h)
 --------------------------------------------------------------------------------
- 0     STEREOSCOPY_2D
-        If either eye is this value then stereoscopy is disabled and the image
-        is treated as 2D.
- 1000  STEREOSCOPY_ANAGLYPH_BLUE
-        The eye is encoded into the blue channel of the image and returned as
-        a blue image.
- 1001  STEREOSCOPY_ANAGLYPH_CYAN
-        The eye is encoded into the blue and green channels of the image and
-        returned as a cyan image.
- 1002  STEREOSCOPY_ANAGLYPH_GREEN
-        The eye is encoded into the green channel of the image and returned
-        as a green image.
- 1003  STEREOSCOPY_ANAGLYPH_MAGENTA
-        The eye is encoded into the red and blue channels of the image and
-        returned as a magenta image.
- 1004  STEREOSCOPY_ANAGLYPH_RED
-        The eye is encoded into the red channel of the image and returned as
-        a red image.
- 1005  STEREOSCOPY_ANAGLYPH_YELLOW
-        The eye is encoded into the red and green channels of the image and
-        returned as a yellow image.
+ blue         STEREOSCOPY_ANAGLYPH_BLUE
+              The eye is encoded into the blue channel of the image and
+              returned as a blue image.
+ cyan         STEREOSCOPY_ANAGLYPH_CYAN
+              The eye is encoded into the blue and green channels of the image
+              and returned as a cyan image.
+ green        STEREOSCOPY_ANAGLYPH_GREEN
+              The eye is encoded into the green channel of the image and
+              returned as a green image.
+ magenta      STEREOSCOPY_ANAGLYPH_MAGENTA
+              The eye is encoded into the red and blue channels of the image
+              and returned as a magenta image.
+ red          STEREOSCOPY_ANAGLYPH_RED
+              The eye is encoded into the red channel of the image and returned
+              as a red image.
+ yellow       STEREOSCOPY_ANAGLYPH_YELLOW
+              The eye is encoded into the red and green channels of the image
+              and returned as a yellow image.
 
- 1010  STEREOSCOPY_ANAGLYPH_BLUE_GRAY
-        The eye is encoded into the blue channel and returned as a grayscale
-        image.
- 1011  STEREOSCOPY_ANAGLYPH_CYAN_GRAY
-        The eye is encoded into the blue and green channels of the image and
-        returned as a grayscale image.
- 1012  STEREOSCOPY_ANAGLYPH_GREEN_GRAY
-        The eye is encoded into the green channel of the image and returned
-        as a grayscale image.
- 1013  STEREOSCOPY_ANAGLYPH_MAGENTA_GRAY
-        The eye is encoded into the red and blue channels of the image and
-        returned as a grayscale image.
- 1014  STEREOSCOPY_ANAGLYPH_RED_GRAY
-        The eye is encoded into the red channel of the image and returned
-        as a grayscale image.
- 1015  STEREOSCOPY_ANAGLYPH_YELLOW_GRAY
-        The eye is encoded into the red and green channels of the image and
-        returned as a grayscale image.
+ blue-gray    STEREOSCOPY_ANAGLYPH_BLUE_GRAY
+              The eye is encoded into the blue channel and returned as a
+              grayscale image.
+ cyan-gray    STEREOSCOPY_ANAGLYPH_CYAN_GRAY
+              The eye is encoded into the blue and green channels of the image
+              and returned as a grayscale image.
+ green-gray   STEREOSCOPY_ANAGLYPH_GREEN_GRAY
+              The eye is encoded into the green channel of the image and
+              returned as a grayscale image.
+ magenta-gray STEREOSCOPY_ANAGLYPH_MAGENTA_GRAY
+              The eye is encoded into the red and blue channels of the image
+              and returned as a grayscale image.
+ red-gray  STEREOSCOPY_ANAGLYPH_RED_GRAY
+              The eye is encoded into the red channel of the image and returned
+              as a grayscale image.
+ yellow-gray  STEREOSCOPY_ANAGLYPH_YELLOW_GRAY
+              The eye is encoded into the red and green channels of the image
+              and returned as a grayscale image.
 
- 1021  STEREOSCOPY_ANAGLYPH_CYAN_FILL
-        The eye is encoded into the blue and green channels of the image and
-        returned as a full colour image. The missing red channel is filled in
-        with the average of the blue and green channels.
- 1023  STEREOSCOPY_ANAGLYPH_MAGENTA_FILL
-        The eye is encoded into the red and blue channels of the image and
-        returned as a full colour image. The missing green channel is filled in
-        with the average of the red and blue channels.
- 1025  STEREOSCOPY_ANAGLYPH_YELLOW_FILL
-        The eye is encoded into the red and green channels of the image and
-        returned as a full colour image. The missing blue channel is filled in
-        with the average of the red and green channels.
+ cyan-fill    STEREOSCOPY_ANAGLYPH_CYAN_FILL
+              The eye is encoded into the blue and green channels of the image
+              and returned as a full colour image. The missing red channel is
+              filled in with the average of the blue and green channels.
+ magenta-fill STEREOSCOPY_ANAGLYPH_MAGENTA_FILL
+              The eye is encoded into the red and blue channels of the image
+              and returned as a full colour image. The missing green channel
+              is filled in with the average of the red and blue channels.
+ yellow-fill  STEREOSCOPY_ANAGLYPH_YELLOW_FILL
+              The eye is encoded into the red and green channels of the image
+              and returned as a full colour image. The missing blue channel is
+              filled in with the average of the red and green channels.
 
- 2000  STEREOSCOPY_SIDEBYSIDE_LEFT
-        The eye is encoded into the left half of the image. Assumes the source
-        is half-SBS but the aspect ratio will need to be halved for full-SBS.
- 2001  STEREOSCOPY_SIDEBYSIDE_RIGHT
-        The eye is encoded into the right half of the image. Assumes the source
-        is half-SBS but the aspect ratio will need to be halved for full-SBS.
- 2002  STEREOSCOPY_SIDEBYSIDE_BOTTOM
-        Not yet implemented. Reserved for top/bottom side-by-side.
- 2003  STEREOSCOPY_SIDEBYSIDE_TOP
-        Not yet implemented. Reserved for top/bottom side-by-side.
+ left         STEREOSCOPY_SIDEBYSIDE_LEFT
+              The eye is encoded into the left half of the image. Assumes the
+              source is half-SBS but the aspect ratio will need to be halved
+              for full-SBS.
+ right        STEREOSCOPY_SIDEBYSIDE_RIGHT
+              The eye is encoded into the right half of the image. Assumes the
+              source is half-SBS but the aspect ratio will need to be halved
+              for full-SBS.
+ bottom       STEREOSCOPY_SIDEBYSIDE_BOTTOM
+              The eye is encoded into the bottom half of the image. Assumes the
+              source is half-SBS but the aspect ratio will need to be halved
+              for full-SBS.
+ top          STEREOSCOPY_SIDEBYSIDE_TOP
+              The eye is encoded into the top half of the image. Assumes the
+              source is half-SBS but the aspect ratio will need to be halved
+              for full-SBS.
 --------------------------------------------------------------------------------
 Please only use the Direct3D vout because the other vout's are not stereoscopic
 aware and will just sequentually show each eye. Also be sure to use the latest
 nVidia drivers. (I have been developing with 275.22.)
 
 The Direct3D vout does not require any configuring. If 3D Vision is detected
-then it will be used. It can be enabled/disabled using the button on the
-3D Vision IR dongle or by using the driver hotkey (CTRL+T by default). If 3D
-Vision is turned off then it does not turn the stereoscopy filter off, so you'll
-just see the left eye.
+and a 3D video frames are being sent to it then it will be displayed in 3D!

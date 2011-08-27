@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>7</number>
   </property>
   <widget class="QWidget" name="tab">
    <attribute name="title">
@@ -1608,6 +1608,103 @@
      </widget>
     </item>
    </layout>
+  </widget>
+  <widget class="QWidget" name="tab_4">
+   <attribute name="title">
+    <string>Stereoscopic 3D</string>
+   </attribute>
+   <widget class="QGroupBox" name="stereoscopyEnable">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>511</width>
+      <height>101</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Split</string>
+    </property>
+    <property name="checkable">
+     <bool>true</bool>
+    </property>
+    <property name="checked">
+     <bool>false</bool>
+    </property>
+    <layout class="QGridLayout" name="_5">
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_52">
+       <property name="text">
+        <string>Left Eye</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QComboBox" name="stereoscopicRightCombo"/>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="label_53">
+       <property name="text">
+        <string>Right Eye</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QComboBox" name="stereoscopicLeftCombo"/>
+     </item>
+     <item row="0" column="0" colspan="2">
+      <widget class="QLabel" name="label_51">
+       <property name="text">
+        <string>Splits a stereoscopic 3d source image into two images.</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QGroupBox" name="stereoscopyCombineEnable">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>120</y>
+      <width>511</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Combine</string>
+    </property>
+    <property name="checkable">
+     <bool>true</bool>
+    </property>
+    <property name="checked">
+     <bool>false</bool>
+    </property>
+    <layout class="QGridLayout" name="_7">
+     <item row="2" column="1">
+      <widget class="QComboBox" name="stereoscopicOutputCombo"/>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="label_55">
+       <property name="text">
+        <string>Output Format</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0" colspan="2">
+      <widget class="QLabel" name="label_54">
+       <property name="text">
+        <string>Combines seperate left and right source images into a single stereoscopic 3d image. Leave this disabled for the individual left and right images to be passed through to the video out module.</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
   </widget>
  </widget>
  <tabstops>

@@ -99,33 +99,6 @@ struct audio_format_t
  * video format description
  */
  
-/**
- * stereoscopic formats
- * sbs = side by side
- * anaglyph = each eye is encoded in a colour channel
- * field sequential = each eye is stored in alternating frames
- */
-#define VIDEO_FORMAT_STEREOSCOPY_2D (0)                            /** no 3d */
-#define VIDEO_FORMAT_STEREOSCOPY_SBS_FULL_HORIZONTAL (1)
-#define VIDEO_FORMAT_STEREOSCOPY_SBS_HALF_HORIZONTAL (2)
-#define VIDEO_FORMAT_STEREOSCOPY_SBS_FULL_VERTICAL (3)
-#define VIDEO_FORMAT_STEREOSCOPY_SBS_HALF_VERTICAL (4)
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_RED_GREEN (5)
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_RED_BLUE (6)
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_RED_CYAN (7)
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_GREEN_BLUE (8)
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_GREEN_MAGENTA (9)
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_BLUE_YELLOW (10)
-#define VIDEO_FORMAT_STEREOSCOPY_FIELD_SEQUENTIAL (11)
-                     /** fill in the missing colour channels with the average
-					                                   of the other channels */
-											     
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_FILL_CHANNELS (0x20000000)
-                                             /** swap the colour of each eye */
-#define VIDEO_FORMAT_STEREOSCOPY_ANAGLYPH_SWAP_EYES (0x40000000)
-#define VIDEO_FORMAT_STEREOSCOPY_SWAP_EYES (0x80000000)        /** flip eyes */
-/*    unsigned int i_stereoscopy;              *//**stereoscopy format*/
-
 struct video_format_t
 {
     vlc_fourcc_t i_chroma;                               /**< picture chroma */

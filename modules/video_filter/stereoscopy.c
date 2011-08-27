@@ -880,19 +880,23 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
     {
         case VLC_CODEC_I411:
             chromaformat = 411;
+			/* msg_Err( p_filter, "stereoscopy.c video is yuv_411"); */
             break;
         case VLC_CODEC_I420:
         case VLC_CODEC_J420:
             chromaformat = 420;
+			/* msg_Err( p_filter, "stereoscopy.c video is yuv_420"); */
             break;
         case VLC_CODEC_YV12:
         case VLC_CODEC_I422:
         case VLC_CODEC_J422:
             chromaformat = 422;
+			/* msg_Err( p_filter, "stereoscopy.c video is yuv_422"); */
             break;
         case VLC_CODEC_I444:
         case VLC_CODEC_J444:
             chromaformat = 444;
+			/* msg_Err( p_filter, "stereoscopy.c video is yuv_444"); */
             break;
         default:
             msg_Err( p_filter, "Unsupported input chroma (%4.4s)",
@@ -3215,6 +3219,7 @@ static void get_lefthalf_from_yuv420( filter_t *p_filter, picture_t *p_inpic, pi
     const int i_visible_lines = p_inpic->p[yp].i_visible_lines;
     const int i_uv_visible_pitch = p_inpic->p[up].i_visible_pitch;
 
+
     const uint8_t *yend = y1in + i_visible_lines * i_in_pitch;
     while( y1in < yend )
     {
@@ -3261,8 +3266,9 @@ static void get_lefthalf_from_yuv420( filter_t *p_filter, picture_t *p_inpic, pi
             y2in++;
 
         }
-        y1in  += (i_visible_pitch / 2) + i_in_pitch - i_visible_pitch;
-        y1out += i_out_pitch - i_visible_pitch;
+		/* skip two y lines because this is yuv420 */
+        y1in  += (i_visible_pitch / 2) + (i_in_pitch * 2)- i_visible_pitch;
+        y1out += (i_out_pitch * 2) - i_visible_pitch;
         uin   += (i_uv_visible_pitch / 2) + p_inpic->p[up].i_pitch - i_uv_visible_pitch;
         uout  += p_outpic->p[up].i_pitch - i_uv_visible_pitch;
         vin   += (i_uv_visible_pitch / 2) + p_inpic->p[vp].i_pitch - i_uv_visible_pitch;
@@ -3422,8 +3428,10 @@ static void get_righthalf_from_yuv420( filter_t *p_filter, picture_t *p_inpic,
             y2in++;
 
         }
-        y1in  += i_in_pitch  - i_visible_pitch;
-        y1out += i_out_pitch - i_visible_pitch;
+		
+		/* skip two y lines because this is yuv420 */
+        y1in  += i_in_pitch * 2  - i_visible_pitch;
+        y1out += i_out_pitch * 2 - i_visible_pitch;
         uin   += p_inpic->p[up].i_pitch - i_uv_visible_pitch;
         uout  += p_outpic->p[up].i_pitch - i_uv_visible_pitch;
         vin   += p_inpic->p[vp].i_pitch  - i_uv_visible_pitch;
@@ -3537,13 +3545,13 @@ static void get_tophalf_from_yuv420( filter_t *p_filter, picture_t *p_inpic, pic
     const int i_visible_lines = p_inpic->p[yp].i_visible_lines;
     const int i_uv_visible_pitch = p_inpic->p[up].i_visible_pitch;
 
-    const uint8_t *yend = y1in + i_visible_lines * i_in_pitch;
+    const uint8_t *yend = y1in + (i_visible_lines / 2) * i_in_pitch;
     
     while( y1in < yend )
     {
         const uint8_t *y1end = y1in + i_visible_pitch;
         y2in  = y1in + i_in_pitch;
-        y2out = y1out + i_out_pitch;
+        y2out = y1out + i_out_pitch * 2;
         while( y1in < y1end )
         {
 			*(y1out + i_out_pitch) = *y1out = *y1in;
@@ -3637,13 +3645,13 @@ static void get_bottomhalf_from_yuv420( filter_t *p_filter, picture_t *p_inpic,
     const int i_visible_lines = p_inpic->p[yp].i_visible_lines;
     const int i_uv_visible_pitch = p_inpic->p[up].i_visible_pitch;
 
-    const uint8_t *yend = y1in + i_visible_lines * i_in_pitch;
+    const uint8_t *yend = y1in + (i_visible_lines / 2) * i_in_pitch;
     
     while( y1in < yend )
     {
         const uint8_t *y1end = y1in + i_visible_pitch;
         y2in  = y1in + i_in_pitch;
-        y2out = y1out + i_out_pitch;
+        y2out = y1out + i_out_pitch * 2;
         while( y1in < y1end )
         {
 			*(y1out + i_out_pitch) = *y1out = *y1in;
@@ -3666,13 +3674,14 @@ static void get_bottomhalf_from_yuv420( filter_t *p_filter, picture_t *p_inpic,
 
 			*(uout + p_outpic->p[up].i_pitch) = *uout = *uin;
 			*(vout + p_outpic->p[vp].i_pitch) = *vout = *vin;
-
-
+			
             uin++;
             vin++;
             uout++;
             vout++;
         }
+		
+		/* skip two y lines because this is yuv420 */
         y1in  += 2*i_in_pitch  - i_visible_pitch;
         y1out += 4*i_out_pitch - i_visible_pitch;
         uin   += p_inpic->p[up].i_pitch - i_uv_visible_pitch;

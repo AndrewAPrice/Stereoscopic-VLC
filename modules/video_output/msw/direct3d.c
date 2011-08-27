@@ -152,10 +152,6 @@ static int DesktopCallback(vlc_object_t *, char const *, vlc_value_t, vlc_value_
  */
 static int Open(vlc_object_t *object)
 {
-    /* Temporary warning */
-    MessageBoxA(NULL, "This build of VLC is uses priority code from NVAPI and is not to be redistributed to binary format.",
-        "Licensing Warning", MB_OK);
-
     vout_display_t *vd = (vout_display_t *)object;
     vout_display_sys_t *sys;
 
@@ -516,116 +512,36 @@ static void Manage (vout_display_t *vd)
 static int NvCreate(vout_display_t *vd)
 {
     vout_display_sys_t *sys = vd->sys;
-    sys->hNvAPIWrapper_dll = LoadLibrary(TEXT("nvapiwrapper.dll"));
-    if(!sys->hNvAPIWrapper_dll) {
-        MessageBoxA(NULL, "Cannot find nvapiwrapper.dll. Is it in the VLC directory?",
-        "nvapiwrapper.dll", MB_ICONERROR);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    /* load in function pointers */
-    sys->nvInitializeFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Initialize@0"));
-    if(!sys->nvInitializeFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Initialize in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    sys->nvUnloadFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Unload@0"));
-    if(!sys->nvUnloadFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Unload in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    sys->nvStereoIsEnabledFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Stereo_IsEnabled@4"));
-    if(!sys->nvStereoIsEnabledFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Stereo_IsEnabled in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    sys->nvStereoEnableFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Stereo_Enable@0"));
-    if(!sys->nvStereoEnableFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Stereo_Enable in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    sys->nvStereoCreateHandleFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Stereo_CreateHandleFromIUnknown@8"));
-    if(!sys->nvStereoCreateHandleFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Stereo_CreateHandleFromIUnknown in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    sys->nvStereoIsActivatedFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Stereo_IsActivated@8"));
-    if(!sys->nvStereoIsActivatedFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Stereo_IsActivated in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    sys->nvStereoDestroyHandleFunc = (void *)GetProcAddress(sys->hNvAPIWrapper_dll,
-        TEXT("_NvAPIWrapper_Stereo_DestroyHandle@4"));
-    if(!sys->nvStereoDestroyHandleFunc) {
-        msg_Err(vd, "Cannot locate NvAPIWrapper_Stereo_DestroyHandle in DLL");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
-        sys->use_nvidia_3d = false;
-        return VLC_EGENERIC;
-    }
-
-    /* now try initialising nvapi */
-    NvAPI_Status (WINAPI *NvAPIWrapper_Initialise)();
-    NvAPIWrapper_Initialise = sys->nvInitializeFunc;
-
-    NvAPI_Status (WINAPI *NvAPIWrapper_Unload)();
-    NvAPIWrapper_Unload = sys->nvUnloadFunc;
-
-    NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_IsEnabled)(NvU8 *pIsStereoEnabled);
-    NvAPIWrapper_Stereo_IsEnabled = sys->nvStereoIsEnabledFunc;
-
-    NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_Enable)(void);
-    NvAPIWrapper_Stereo_Enable = sys->nvStereoEnableFunc;
-
-    if(NvAPIWrapper_Initialise() == NVAPI_OK)
+    
+    /* try initialising nvapi */
+    if(NvAPI_Initialize() == NVAPI_OK)
     {
         /* not returning NVAPI_OK for Initialise() could mean bad drivers or
            not using an nVidia card */
-        NvU8 stereoEnabled;
-        if(NvAPIWrapper_Stereo_IsEnabled(&stereoEnabled) != NVAPI_OK)
+        unsigned char stereoEnabled;
+        if(NvAPI_Stereo_IsEnabled(&stereoEnabled) != NVAPI_OK)
         {
             /* not returning NVAPI_OK for Stereo_IsEnabled could possibly mean
                an unsupported video card or not running Windows Vista/7 */
-            msg_Err(vd, "NV stereo did not want to enable");
-            NvAPIWrapper_Unload();
-            FreeLibrary(sys->hNvAPIWrapper_dll);
+            msg_Warn(vd, "Cannot check if NVAPI 3d Vision is enabled. Bad drive or not using compatible card.");
+            NvAPI_Unload();
             sys->use_nvidia_3d = false;
             return VLC_EGENERIC;
         }
         else
         {
-            if(stereoEnabled == 0)
-                NvAPIWrapper_Stereo_Enable();
+			if(!stereoEnabled)
+			{
+			    msg_Warn(vd, "NVAPI 3d Vision is disabled. Enable in nVidia Control Panel or not using compatible card.");
+			    NvAPI_Unload();
+			    sys->use_nvidia_3d = false;
+			    return VLC_EGENERIC;
+			}
         }
     }
     else
     {
-        msg_Err(vd, "NvAPI did not want to initialize");
-        FreeLibrary(sys->hNvAPIWrapper_dll);
+        msg_Warn(vd, "NvAPI did not want to initialize. Bad driver or not using nVidia card.");
         sys->use_nvidia_3d = false;
         return VLC_EGENERIC;
     }
@@ -690,12 +606,7 @@ static void NvDestroy(vout_display_t *vd)
 
     sys->use_nvidia_3d = false;
 
-    NvAPI_Status (WINAPI *NvAPIWrapper_Unload)();
-    NvAPIWrapper_Unload = sys->nvUnloadFunc;
-
-    NvAPIWrapper_Unload();
-
-    FreeLibrary(sys->hNvAPIWrapper_dll);
+    NvAPI_Unload();
 }
 
 /**
@@ -814,15 +725,10 @@ static int Direct3DOpen(vout_display_t *vd, video_format_t *fmt)
     /* attempt to create a d3d device */
     if(sys->use_nvidia_3d)
     {
-        NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_CreateHandleFromIUnknown)
-            (IUnknown *pDevice, StereoHandle *pStereoHandle);
-        NvAPIWrapper_Stereo_CreateHandleFromIUnknown =
-            sys->nvStereoCreateHandleFunc;
-
-        if(NvAPIWrapper_Stereo_CreateHandleFromIUnknown(sys->d3ddev,
+        if(NvAPI_Stereo_CreateHandleFromIUnknown(sys->d3ddev,
             &sys->nvStereoHandle) != NVAPI_OK)
         {
-	    msg_Err(vd, "Could not create a stereo handle.");
+        msg_Err(vd, "Could not create a stereo handle.");
             NvDestroy(vd);
         }
     }
@@ -852,10 +758,7 @@ static void Direct3DClose(vout_display_t *vd)
     if(sys->use_nvidia_3d)
     {
         /* destroy stereo handle */
-        NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_DestroyHandle)(
-            StereoHandle stereoHandle);
-        NvAPIWrapper_Stereo_DestroyHandle = sys->nvStereoDestroyHandleFunc;
-        NvAPIWrapper_Stereo_DestroyHandle(sys->nvStereoHandle);
+        NvAPI_Stereo_DestroyHandle(sys->nvStereoHandle);
     }
 
     if (sys->d3ddev)
@@ -881,10 +784,7 @@ static int Direct3DReset(vout_display_t *vd)
     if(sys->use_nvidia_3d)
     {
         /* destroy stereo handle */
-        NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_DestroyHandle)(
-            StereoHandle stereoHandle);
-        NvAPIWrapper_Stereo_DestroyHandle = sys->nvStereoDestroyHandleFunc;
-        NvAPIWrapper_Stereo_DestroyHandle(sys->nvStereoHandle);
+        NvAPI_Stereo_DestroyHandle(sys->nvStereoHandle);
     }
 
     /* */
@@ -897,15 +797,10 @@ static int Direct3DReset(vout_display_t *vd)
     /* attempt to create a d3d device */
     if(sys->use_nvidia_3d)
     {
-        NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_CreateHandleFromIUnknown)
-            (IUnknown *pDevice, StereoHandle *pStereoHandle);
-        NvAPIWrapper_Stereo_CreateHandleFromIUnknown =
-            sys->nvStereoCreateHandleFunc;
-
-        if(NvAPIWrapper_Stereo_CreateHandleFromIUnknown(sys->d3ddev,
+        if(NvAPI_Stereo_CreateHandleFromIUnknown(sys->d3ddev,
             &sys->nvStereoHandle) != NVAPI_OK)
         {
-	    msg_Err(vd, "Could not create a stereo handle.");
+        msg_Err(vd, "Could not create a stereo handle.");
             NvDestroy(vd);
         }
     }
@@ -1678,33 +1573,68 @@ static int Direct3DRenderRegion(vout_display_t *vd,
         sys->use_nvidia_3d)
     {
         /* check to see if stereo is turned on */
-        NvAPI_Status (WINAPI *NvAPIWrapper_Stereo_IsActivated)(
-	StereoHandle stereoHandle, NvU8 *pIsStereoOn);
-        NvAPIWrapper_Stereo_IsActivated = sys->nvStereoIsActivatedFunc;
+        unsigned char stereoOn;
+        if(NvAPI_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
+		{
+			if(!stereoOn)
+			{
+				/* activate 3d vision because it's not yet turned on */
+				NvAPI_Stereo_Activate(sys->nvStereoHandle);
+			}
 
-        NvU8 stereoOn;
-        if(NvAPIWrapper_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
-            drawInStereo = (bool)stereoOn;
+			/* check again */
+			if(NvAPI_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
+			{
+				drawInStereo = (bool)stereoOn;
+			}
+			else
+				drawInStereo = false;
+		}
         else
             drawInStereo = false;
     }
     else
+	{
+		if(sys->use_nvidia_3d)
+		{
+			/* check if stereo is on */
+            unsigned char stereoOn;
+			if(NvAPI_Stereo_IsActivated(sys->nvStereoHandle, &stereoOn) == NVAPI_OK)
+			{
+				if(stereoOn)
+				{
+					/* deactivate 3d vision because it's turned on (saves wireless glass's power
+					  to disable when not viewing 3d) */
+					NvAPI_Stereo_Deactivate(sys->nvStereoHandle);
+				}
+			}
+
+		}
         drawInStereo = false;
+	}
 
     if(drawInStereo)
     {
         /* draw stereoscopic image */
 
         RECT dest = sys->rect_dest_clipped;
+        /* work around for anyone reading this code:
+            showing right image on left half of stereo surface, then showing
+            left image on right half of stereo surface, and using the
+            DXNV_SWAP_EYES flag
+
+            For some reason stereomode wouldn't work correctly without
+            that flag.
+        */
         /* copy left and right image to stereo surface*/
-        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dleft_surface,
-            &sys->nvRectLeft, sys->d3dnv_surface, &dest,
+        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dright_surface,
+            &sys->nvRectLeft/*&sys->rect_src_clipped*/, sys->d3dnv_surface, &dest,
             D3DTEXF_NONE);
 
-        dest.left += sys->rect_display.right;
+        dest.left = sys->rect_display.right;
         dest.right += sys->rect_display.right;
-        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dright_surface,
-            &sys->nvRectLeft, sys->d3dnv_surface, &dest,
+        IDirect3DDevice9_StretchRect(sys->d3ddev, sys->d3dleft_surface,
+            &sys->nvRectLeft/*&sys->rect_src_clipped*/, sys->d3dnv_surface, &dest,
             D3DTEXF_NONE);
 
         /* write in the nvidia header */

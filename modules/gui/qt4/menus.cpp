@@ -239,8 +239,7 @@ static int VideoAutoMenuBuilder( vout_thread_t *p_object,
     PUSH_VAR( "deinterlace" );
     PUSH_VAR( "deinterlace-mode" );
     PUSH_VAR( "postprocess" );
-    PUSH_VAR( "stereoscopy" );
-
+    
     return VLC_SUCCESS;
 }
 
@@ -652,7 +651,6 @@ QMenu *QVLCMenu::VideoMenu( intf_thread_t *p_intf, QMenu *current, bool b_subtit
         addActionWithSubmenu( current, "deinterlace", qtr( "&Deinterlace" ) );
         addActionWithSubmenu( current, "deinterlace-mode", qtr( "&Deinterlace mode" ) );
         addActionWithSubmenu( current, "postprocess", qtr( "&Post processing" ) );
-        addActionWithSubmenu( current, "stereoscopy", qtr( "&Stereoscopy" ) );
     }
 
     p_input = THEMIM->getInput();

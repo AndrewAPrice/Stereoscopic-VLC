@@ -30,7 +30,7 @@
 
 #ifdef MODULE_NAME_IS_direct3d
 /* assume d3d9.h has alreayd been included */
-#include <nvapi.h>
+#include "nvapi.h"
 #endif
 
 #ifdef MODULE_NAME_IS_wingapi
@@ -208,13 +208,6 @@ struct vout_display_sys_t
                                               loaded? if false then can
                                               assume dll is not loaded */
     void                    *nvStereoHandle; /* 3d vision stereo handle */
-    void                    *nvInitializeFunc; /* NvAPI_Initialize */
-    void                    *nvUnloadFunc; /* NvAPI_Unload */
-    void                    *nvStereoIsEnabledFunc; /* NvAPI_Stereo_IsEnabled */
-    void                    *nvStereoEnableFunc ; /* NvAPI_Stereo_Enable */
-    void                    *nvStereoCreateHandleFunc; /* NvAPI_Stereo_CreateHandleFromIUnknown */
-    void                    *nvStereoIsActivatedFunc; /* NvAPI_Stereo_IsActivated */
-    void                    *nvStereoDestroyHandleFunc; /* NvAPI_Stereo_DestroyHandle */
 
     RECT                    nvRectLeft;
     RECT                    nvRectRight;
@@ -225,14 +218,14 @@ struct vout_display_sys_t
     LPDIRECT3DVERTEXBUFFER9 d3dvtc;
     int                     d3dregion_count;
     struct d3d_region_t     *d3dregion;
-	/* Stereoscopic scene objects */
+    /* Stereoscopic scene objects */
     LPDIRECT3DTEXTURE9      d3dtex_right; /* store right eye, d3dtex for left */
     LPDIRECT3DSURFACE9      d3dnv_surface;
     LPDIRECT3DSURFACE9      d3dback_buffer;
     LPDIRECT3DSURFACE9      d3dleft_surface;
-	LPDIRECT3DSURFACE9      d3dright_surface;
-	bool                    left_tex_filled;
-	bool                    right_tex_filled;
+    LPDIRECT3DSURFACE9      d3dright_surface;
+    bool                    left_tex_filled;
+    bool                    right_tex_filled;
 
     picture_resource_t      resource;
 
