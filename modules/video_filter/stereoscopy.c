@@ -907,7 +907,7 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
 
     /* CORRECT METHOD BUT COMMENTED OUT WHILE 'DROPPING PICTURES' ISSUE REMAINS */
 
-	/* calculate time difference and find mid point (to insert other frame at) *//*
+	/* calculate time difference and find mid point (to insert other frame at) */
 	mtime_t i_currentTime = p_inpic->date;
 	mtime_t i_midPoint = p_sys->i_lastTime + (i_currentTime - p_sys->i_lastTime) / 2;
 	p_sys->i_lastTime = i_currentTime;
@@ -940,16 +940,16 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
 
     picture_Release(p_inpic);
     return p_leftOut;
-    */
+    
 
     /* DECODES LEFT AND RIGHT FRAMES ALTERNATIVELY, DROPS A FRAME BUT IS A
        WORKAROUND UNTIL DROPPING PICTURES IS FIXED */
-	
+	/*
     if(p_sys->b_leftEyeLast)
     {
         p_sys->b_leftEyeLast = false;
-
-        /* do right eye */
+		*/
+        /* do right eye *//*
         picture_t *p_rightOut = DecodeImageYUV( p_filter, p_inpic,
             p_sys->i_rightEyeMethod, chromaformat);
 
@@ -967,8 +967,8 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
     else
     {
         p_sys->b_leftEyeLast = true;
-
-        /* do left eye */
+		*/
+        /* do left eye *//*
         picture_t *p_leftOut = DecodeImageYUV( p_filter, p_inpic,
             p_sys->i_leftEyeMethod, chromaformat);
 
@@ -982,7 +982,7 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
         p_leftOut->i_eye = 1;
         picture_Release( p_inpic );
         return p_leftOut;
-    }
+    }*/
 }
 
 /*****************************************************************************

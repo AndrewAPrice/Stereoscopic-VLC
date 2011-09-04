@@ -263,13 +263,18 @@ picture_t *picture_New( vlc_fourcc_t i_chroma, int i_width, int i_height, int i_
  *****************************************************************************/
 void picture_Delete( picture_t *p_picture )
 {
-    assert( p_picture && p_picture->i_refcount == 0 );
-    assert( p_picture->p_release_sys == NULL );
+        /* while( p_picture != NULL ) { */
+        picture_t *p_next = p_picture->p_next;
 
-    free( p_picture->p_q );
-    free( p_picture->p_data_orig );
-    free( p_picture->p_sys );
-    free( p_picture );
+        assert( p_picture && p_picture->i_refcount == 0 );
+        assert( p_picture->p_release_sys == NULL );
+
+        free( p_picture->p_q );
+        free( p_picture->p_data_orig );
+        free( p_picture->p_sys );
+	    free( p_picture );
+		p_picture = p_next;
+        /*}*/
 }
 
 /*****************************************************************************
