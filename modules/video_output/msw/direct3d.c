@@ -321,7 +321,10 @@ static void Prepare(vout_display_t *vd, picture_t *picture, subpicture_t *subpic
     }
 
     d3d_region_t picture_region;
-    if (!Direct3DImportPicture(vd, &picture_region, surface, i_eye)) {
+    if (!Direct3DImportPicture(vd, &picture_region, surface, i_eye)
+       /*!(i_eye & STEREO_WAIT_FOR_NEXT_FRAME_BIT)*/ /* causes it to flicker,
+                                                         perhapes stopping Display
+                                                         will fix it */) {
         int subpicture_region_count     = 0;
         d3d_region_t *subpicture_region = NULL;
         if (subpicture)
@@ -1406,6 +1409,8 @@ static int Direct3DImportPicture(vout_display_t *vd,
         return VLC_EGENERIC;
     }
 
+	/* mask out all flags so i_eye only stores the eye number */
+	i_eye &= STEREO_EYE_MASK;
 
     /* msg_Dbg(vd, "Receiving eye (i_eye=%i)", i_eye); */
 

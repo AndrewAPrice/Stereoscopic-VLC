@@ -904,9 +904,7 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
             picture_Release( p_inpic );
             return NULL;
     }
-
-    /* CORRECT METHOD BUT COMMENTED OUT WHILE 'DROPPING PICTURES' ISSUE REMAINS */
-
+	
 	/* calculate time difference and find mid point (to insert other frame at) */
 	mtime_t i_currentTime = p_inpic->date;
 	mtime_t i_midPoint = p_sys->i_lastTime + (i_currentTime - p_sys->i_lastTime) / 2;
@@ -922,7 +920,8 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
         return NULL;
     }
 
-    p_leftOut->i_eye = 1;
+	/* left eye and tell vout to wait for the next eye instead of immediately presenting */
+    p_leftOut->i_eye = 1 | STEREO_WAIT_FOR_NEXT_FRAME_BIT;
 
     p_leftOut->p_next = p_rightOut = DecodeImageYUV( p_filter, p_inpic,
         p_sys->i_rightEyeMethod, chromaformat);
@@ -943,7 +942,8 @@ static picture_t *Filter( filter_t *p_filter, picture_t *p_inpic )
     
 
     /* DECODES LEFT AND RIGHT FRAMES ALTERNATIVELY, DROPS A FRAME BUT IS A
-       WORKAROUND UNTIL DROPPING PICTURES IS FIXED */
+       WORKAROUND UNTIL DROPPING PICTURES IS FIXED - fixed :)
+	   left in here incase I have to switch back to it for some reason */
 	/*
     if(p_sys->b_leftEyeLast)
     {

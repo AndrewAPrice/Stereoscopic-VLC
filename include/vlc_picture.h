@@ -61,6 +61,13 @@ typedef struct plane_t
  */
 typedef struct picture_release_sys_t picture_release_sys_t;
 
+/* A bit flag for i_eye that indicates to wait for the next frame before
+   presenting. */
+#define STEREO_WAIT_FOR_NEXT_FRAME_BIT (1 << 8)
+
+/* Mask the lower bits of i_eye to return the eye that should be drawn. */
+#define STEREO_EYE_MASK 0xFF
+
 /**
  * Video picture
  */
