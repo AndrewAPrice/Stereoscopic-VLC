@@ -107,7 +107,10 @@ struct vout_display_opengl_t {
     int        tex_width[PICTURE_PLANE_MAX];
     int        tex_height[PICTURE_PLANE_MAX];
 
-    GLuint     texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX];
+    GLuint     textureLeft[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX];
+	GLuint     textureRight[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX];
+
+	bool       b_is3D;
 
     int         region_count;
     gl_region_t *region;
@@ -131,6 +134,12 @@ struct vout_display_opengl_t {
     void (*ActiveTextureARB)(GLenum);
     void (*MultiTexCoord2fARB)(GLenum, GLfloat, GLfloat);
 };
+
+void vout_display_opengl_GenTextures(vout_display_opengl_t *vgl, GLuint texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX]);
+void vout_display_opengl_UpdatePicture(vout_display_opengl_t *vgl,
+                                picture_t *picture, GLuint texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX]);
+void vout_display_opengl_DrawEye(vout_display_opengl_t *vgl, const video_format_t *source,
+                                GLuint texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX]);
 
 static inline int GetAlignedSize(unsigned size)
 {
@@ -242,6 +251,7 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
 
     vgl->chroma = vlc_fourcc_GetChromaDescription(vgl->fmt.i_chroma);
     vgl->use_multitexture = vgl->chroma->plane_count > 1;
+    vgl->b_is3D = false;
 
     bool supports_npot = false;
 #if USE_OPENGL_ES == 2
@@ -355,8 +365,10 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
 
     /* */
     for (int i = 0; i < VLCGL_TEXTURE_COUNT; i++) {
-        for (int j = 0; j < PICTURE_PLANE_MAX; j++)
-            vgl->texture[i][j] = 0;
+        for (int j = 0; j < PICTURE_PLANE_MAX; j++) {
+            vgl->textureLeft[i][j] = 0;
+            vgl->textureRight[i][j] = 0;
+       }
     }
     vgl->region_count = 0;
     vgl->region = NULL;
@@ -380,8 +392,10 @@ void vout_display_opengl_Delete(vout_display_opengl_t *vgl)
 
         glFinish();
         glFlush();
-        for (int i = 0; i < VLCGL_TEXTURE_COUNT; i++)
-            glDeleteTextures(vgl->chroma->plane_count, vgl->texture[i]);
+        for (int i = 0; i < VLCGL_TEXTURE_COUNT; i++) {
+            glDeleteTextures(vgl->chroma->plane_count, vgl->textureRight[i]);
+            glDeleteTextures(vgl->chroma->plane_count, vgl->textureLeft[i]);
+        }
 
         if (vgl->program)
             vgl->DeleteProgramsARB(1, &vgl->program);
@@ -428,6 +442,44 @@ static void PictureUnlock(picture_t *picture)
 }
 #endif
 
+void vout_display_opengl_GenTextures(vout_display_opengl_t *vgl, GLuint texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX]) {
+	for (int i = 0; i < VLCGL_TEXTURE_COUNT; i++) {
+        glGenTextures(vgl->chroma->plane_count, texture[i]);
+        for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
+            if (vgl->use_multitexture)
+                vgl->ActiveTextureARB(GL_TEXTURE0_ARB + j);
+            glBindTexture(vgl->tex_target, texture[i][j]);
+
+#if !USE_OPENGL_ES
+            /* Set the texture parameters */
+            glTexParameterf(vgl->tex_target, GL_TEXTURE_PRIORITY, 1.0);
+            glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+#endif
+
+            glTexParameteri(vgl->tex_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(vgl->tex_target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(vgl->tex_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(vgl->tex_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+#ifdef MACOS_OPENGL
+            /* Tell the driver not to make a copy of the texture but to use
+               our buffer */
+            glEnable(GL_UNPACK_CLIENT_STORAGE_APPLE);
+            glPixelStorei(GL_UNPACK_CLIENT_STORAGE_APPLE, GL_TRUE);
+
+            /* Use AGP texturing */
+            glTexParameteri(vgl->tex_target, GL_TEXTURE_STORAGE_HINT_APPLE,
+                             GL_STORAGE_SHARED_APPLE);
+#endif
+
+            /* Call glTexImage2D only once, and use glTexSubImage2D later */
+            glTexImage2D(vgl->tex_target, 0,
+                         vgl->tex_format, vgl->tex_width[j], vgl->tex_height[j],
+                         0, vgl->tex_format, vgl->tex_type, NULL);
+        }
+    }
+}
+
 picture_pool_t *vout_display_opengl_GetPool(vout_display_opengl_t *vgl, unsigned requested_count)
 {
     if (vgl->pool)
@@ -470,41 +522,8 @@ picture_pool_t *vout_display_opengl_GetPool(vout_display_opengl_t *vgl, unsigned
     if (vlc_gl_Lock(vgl->gl))
         return vgl->pool;
 
-    for (int i = 0; i < VLCGL_TEXTURE_COUNT; i++) {
-        glGenTextures(vgl->chroma->plane_count, vgl->texture[i]);
-        for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
-            if (vgl->use_multitexture)
-                vgl->ActiveTextureARB(GL_TEXTURE0_ARB + j);
-            glBindTexture(vgl->tex_target, vgl->texture[i][j]);
-
-#if !USE_OPENGL_ES
-            /* Set the texture parameters */
-            glTexParameterf(vgl->tex_target, GL_TEXTURE_PRIORITY, 1.0);
-            glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-#endif
-
-            glTexParameteri(vgl->tex_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(vgl->tex_target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(vgl->tex_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(vgl->tex_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-#ifdef MACOS_OPENGL
-            /* Tell the driver not to make a copy of the texture but to use
-               our buffer */
-            glEnable(GL_UNPACK_CLIENT_STORAGE_APPLE);
-            glPixelStorei(GL_UNPACK_CLIENT_STORAGE_APPLE, GL_TRUE);
-
-            /* Use AGP texturing */
-            glTexParameteri(vgl->tex_target, GL_TEXTURE_STORAGE_HINT_APPLE,
-                             GL_STORAGE_SHARED_APPLE);
-#endif
-
-            /* Call glTexImage2D only once, and use glTexSubImage2D later */
-            glTexImage2D(vgl->tex_target, 0,
-                         vgl->tex_format, vgl->tex_width[j], vgl->tex_height[j],
-                         0, vgl->tex_format, vgl->tex_type, NULL);
-        }
-    }
+    vout_display_opengl_GenTextures(vgl, vgl->textureLeft);
+    vout_display_opengl_GenTextures(vgl, vgl->textureRight);
 
     vlc_gl_Unlock(vgl->gl);
 
@@ -514,6 +533,23 @@ error:
     for (unsigned i = 0; i < count; i++)
         picture_Delete(picture[i]);
     return NULL;
+}
+
+void vout_display_opengl_UpdatePicture(vout_display_opengl_t *vgl,
+                                picture_t *picture, GLuint texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX])
+{
+	/* Update the texture */
+    for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
+        if (vgl->use_multitexture)
+            vgl->ActiveTextureARB(GL_TEXTURE0_ARB + j);
+        glBindTexture(vgl->tex_target, texture[0][j]);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, picture->p[j].i_pitch / picture->p[j].i_pixel_pitch);
+        glTexSubImage2D(vgl->tex_target, 0,
+                        0, 0,
+                        vgl->fmt.i_width  * vgl->chroma->p[j].w.num / vgl->chroma->p[j].w.den,
+                        vgl->fmt.i_height * vgl->chroma->p[j].h.num / vgl->chroma->p[j].h.den,
+                        vgl->tex_format, vgl->tex_type, picture->p[j].p_pixels);
+    }
 }
 
 int vout_display_opengl_Prepare(vout_display_opengl_t *vgl,
@@ -542,18 +578,21 @@ int vout_display_opengl_Prepare(vout_display_opengl_t *vgl,
     /* Bind to the texture for drawing */
     glBindTexture(vgl->tex_target, PictureGetTexture(picture));
 #else
-    /* Update the texture */
-    for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
-        if (vgl->use_multitexture)
-            vgl->ActiveTextureARB(GL_TEXTURE0_ARB + j);
-        glBindTexture(vgl->tex_target, vgl->texture[0][j]);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, picture->p[j].i_pitch / picture->p[j].i_pixel_pitch);
-        glTexSubImage2D(vgl->tex_target, 0,
-                        0, 0,
-                        vgl->fmt.i_width  * vgl->chroma->p[j].w.num / vgl->chroma->p[j].w.den,
-                        vgl->fmt.i_height * vgl->chroma->p[j].h.num / vgl->chroma->p[j].h.den,
-                        vgl->tex_format, vgl->tex_type, picture->p[j].p_pixels);
-    }
+
+	/* which eye this image belongs to */
+
+	if(picture->i_eye == 0) {
+		vgl->b_is3D = false;
+		vout_display_opengl_UpdatePicture(vgl, picture, vgl->textureLeft);
+	} else {
+		vgl->b_is3D = true;
+		if(picture->i_eye == 1) {
+		    vout_display_opengl_UpdatePicture(vgl, picture, vgl->textureLeft);
+		}
+		else {
+            vout_display_opengl_UpdatePicture(vgl, picture, vgl->textureRight);
+		}
+	}
 #endif
 
     int         last_count = vgl->region_count;
@@ -635,12 +674,10 @@ int vout_display_opengl_Prepare(vout_display_opengl_t *vgl,
     return VLC_SUCCESS;
 }
 
-int vout_display_opengl_Display(vout_display_opengl_t *vgl,
-                                const video_format_t *source)
+/* draws a particular eye */
+void vout_display_opengl_DrawEye(vout_display_opengl_t *vgl, const video_format_t *source,
+                                GLuint texture[VLCGL_TEXTURE_COUNT][PICTURE_PLANE_MAX])
 {
-    if (vlc_gl_Lock(vgl->gl))
-        return VLC_EGENERIC;
-
     /* glTexCoord works differently with GL_TEXTURE_2D and
        GL_TEXTURE_RECTANGLE_EXT */
     float left[PICTURE_PLANE_MAX];
@@ -663,8 +700,7 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
         bottom[j] = (source->i_y_offset + source->i_visible_height) * scale_h;
     }
 
-
-    /* Why drawing here and not in Render()? Because this way, the
+	    /* Why drawing here and not in Render()? Because this way, the
        OpenGL providers can call vout_display_opengl_Display to force redraw.i
        Currently, the OS X provider uses it to get a smooth window resizing */
 
@@ -704,7 +740,7 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
         if (vgl->use_multitexture)
             vgl->ActiveTextureARB(GL_TEXTURE0_ARB + j);
-        glBindTexture(vgl->tex_target, vgl->texture[0][j]);
+        glBindTexture(vgl->tex_target, texture[0][j]);
     }
 #endif
     glBegin(GL_POLYGON);
@@ -769,6 +805,25 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
     glDisable(GL_BLEND);
     glDisable(GL_TEXTURE_2D);
 #endif
+}
+
+int vout_display_opengl_Display(vout_display_opengl_t *vgl,
+                                const video_format_t *source)
+{
+    if (vlc_gl_Lock(vgl->gl))
+        return VLC_EGENERIC;
+
+	/* draw eyes here */
+	if(vgl->b_is3D) {
+		glDrawBuffer(GL_BACK_LEFT);
+		vout_display_opengl_DrawEye(vgl, source, vgl->textureLeft);
+		glDrawBuffer(GL_BACK_RIGHT);
+		vout_display_opengl_DrawEye(vgl, source, vgl->textureRight);
+	} else {
+		glDrawBuffer(GL_BACK);
+		vout_display_opengl_DrawEye(vgl, source, vgl->textureLeft);
+	}
+
 
     vlc_gl_Swap(vgl->gl);
 
